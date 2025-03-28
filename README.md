@@ -1,5 +1,7 @@
+
 # ARIADNE (spectrAl eneRgy dIstribution bAyesian moDel averagiNg fittEr)
 ## Characterize stellar atmospheres easily!
+### changes made by me were done in the plotter.py file: the models are now read in as a different file type (not fits files anymore) + a small issue with plt labels fixed
 **ARIADNE** Is a code written in python 3.7+ designed to fit broadband
 photometry to different stellar atmosphere models automatically using Nested
 Sampling algorithms.
