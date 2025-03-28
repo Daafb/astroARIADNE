@@ -7,25 +7,14 @@ from pkg_resources import resource_filename
 
 __ROOT__ = '/'.join(os.path.abspath(inspect.getfile(inspect.currentframe())
                                     ).split('/')[:-1])
-gridsdir = resource_filename('astroEDIT', 'Datafiles/model_grids')
-priorsdir = resource_filename('astroEDIT', 'Datafiles/prior')
-filesdir = resource_filename('astroEDIT', 'Datafiles')
-
-
+gridsdir = resource_filename('astroARIADNE', 'Datafiles/model_grids')
+priorsdir = resource_filename('astroARIADNE', 'Datafiles/prior')
+filesdir = resource_filename('astroARIADNE', 'Datafiles')
 
 try:
     modelsdir = os.environ['ARIADNE_MODELS']
-
 except KeyError:
     modelsdir = None
-
-# i added this part myself, the export 'path/to/models_dir' stuff didn't work so i hard coded it in. -daaf 12/16/2024
-try:
-    modelsdir = '~/programs/David_Workspace/SED_fitting/Models_Dir/'
-except KeyError:
-  pass
-
-print('modelsdir: ', modelsdir)
 
 # pyphot filter names.
 filter_names = np.array([

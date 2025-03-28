@@ -13,7 +13,6 @@ import numpy as np
 from astropy import units as u
 from astropy.io import fits
 from astropy.table import Table
-from astropy.io.votable import parse
 from extinction import apply
 from isochrones.interp import DFInterpolator
 from matplotlib.collections import LineCollection
@@ -21,7 +20,6 @@ from matplotlib.gridspec import GridSpec
 from PyAstronomy import pyasl
 from scipy.optimize import curve_fit
 from scipy.stats import gaussian_kde, norm
-import os
 
 import corner
 from dynesty import plotting as dyplot
@@ -1114,8 +1112,7 @@ class SEDPlotter:
                         bbox_inches='tight')
 
     def plot_corner(self):
-        """Make corner plot.
-        - updated in early 2025 by david see line 1206"""
+        """Make corner plot."""
         print('Plotting corner.')
         m = self.method if self.method == 'samples' else 'average'
         samples = self.out[f'weighted_{m}']
@@ -1173,8 +1170,8 @@ class SEDPlotter:
                 ax = axes[yi, xi]
                 if xi == 0:
                     for tick in ax.yaxis.get_major_ticks():
-                        tick.label1.set_fontsize(self.corner_tick_fontsize) # see line 1203
-                        tick.label1.set_fontname(self.fontname) # see line 1203
+                        tick.label.set_fontsize(self.corner_tick_fontsize)
+                        tick.label.set_fontname(self.fontname)
                         ax.set_ylabel(
                             labels[yi],
                             labelpad=self.corner_labelpad,
@@ -1183,8 +1180,8 @@ class SEDPlotter:
                         )
                 if yi == theta.shape[0] - 1:
                     for tick in ax.xaxis.get_major_ticks():
-                        tick.label1.set_fontsize(self.corner_tick_fontsize) # see line 1203
-                        tick.label1.set_fontname(self.fontname) # see line 1203
+                        tick.label.set_fontsize(self.corner_tick_fontsize)
+                        tick.label.set_fontname(self.fontname)
                         ax.set_xlabel(
                             labels[xi],
                             labelpad=self.corner_labelpad,
@@ -1203,8 +1200,8 @@ class SEDPlotter:
                 fontname=self.fontname
             )
             for tick in axes[-1, -1].xaxis.get_major_ticks():
-                tick.label1.set_fontsize(self.corner_tick_fontsize) #fix https://github.com/jvines/astroARIADNE/issues/53
-                tick.label1.set_fontname(self.fontname)
+                tick.label.set_fontsize(self.corner_tick_fontsize)
+                tick.label.set_fontname(self.fontname)
 
             if self.pdf:
                 plt.savefig(f'{self.out_folder}/CORNER.pdf',
@@ -1269,70 +1266,34 @@ class SEDPlotter:
         where TTT are the first 3 digits of the effective temperature if it's a
         number over 10000, else it's the first 2 digit prepended by a 0.
         G.G is the log g and Z.Z the metallicity.
-        
-        -David 2/19/2025 updated to handle non fits files + some quality of life changes
         """
-
-        # Conversion from erg/cm2/s/Angstrom to erg/cm2/s/micron
-        conversion = (u.erg / u.s / u.cm ** 2 / u.angstrom).to(u.erg / u.s / u.cm ** 2 / u.um)
-
-        # Select closest model grid values
+        conversion = (u.erg / u.s / u.cm ** 2 / u.angstrom)
+        conversion = conversion.to(u.erg / u.s / u.cm ** 2 / u.um)
         teff = self.theta[0]
         logg = self.theta[1]
         z = self.theta[2]
-
-        select_teff = np.argmin(abs(teff - np.unique(self.star.teff)))
-        select_logg = np.argmin(abs(logg - np.unique(self.star.logg)))
-        select_z = np.argmin(abs(z - np.unique(self.star.z)))
-
+        select_teff = np.argmin((abs(teff - np.unique(self.star.teff))))
+        select_logg = np.argmin((abs(logg - np.unique(self.star.logg))))
+        select_z = np.argmin((abs(z - np.unique(self.star.z))))
         sel_teff = int(np.unique(self.star.teff)[select_teff]) // 100
         sel_logg = np.unique(self.star.logg)[select_logg]
         sel_z = np.unique(self.star.z)[select_z]
-
-        # Format metallicity
+        metal_add = ''
         if sel_z < 0:
             metal_add = str(sel_z)
-        elif sel_z == 0:
+        if sel_z == 0:
             metal_add = '-0.0'
-        else:
+        if sel_z > 0:
             metal_add = '+' + str(sel_z)
-
-        # Build pattern for glob search (ignore alpha completely)
-        pattern = self.moddir + 'BTSettl/AGSS2009/lte'
-        pattern += f"{sel_teff:03d}-{sel_logg:.1f}{metal_add}*.BT-Cond.7.dat.xml"
-        pattern = os.path.expanduser(pattern)
-
-        # Find model file using glob wildcard
-
-        print("🔍 Searching for models with pattern:", pattern)
-
-        # Find model file using glob wildcard
-        matches = glob.glob(pattern)
-
-        if not matches:
-            raise FileNotFoundError(
-                f"❌ No model file found for pattern: {pattern}\n"
-                "Please download The BT-Settl file for a star with:\n"
-                f"T: {sel_teff:03d}\n"
-                f"z: {metal_add}\n"
-                f"Log(g): {sel_logg:.1f}"
-        )
-
-
-        selected_SED = matches[0]
-        print("✅ Using model file:", selected_SED)
-
-        # Read VOTable file
-        df = read_votable_as_dataframe(selected_SED)
-
-        # Convert columns to arrays and apply units
-        wave = df['WAVELENGTH'].to_numpy() * u.angstrom.to(u.um)
-        flux = df['FLUX'].to_numpy() * conversion
-
-        # Resolve dtype mismatch
-        wave = wave.astype('float64')
-        flux = flux.astype('float64')
-
+        selected_SED = self.moddir + 'BTSettl/AGSS2009/lte'
+        selected_SED += str(sel_teff) if len(str(sel_teff)) == 3 else \
+            '0' + str(sel_teff)
+        selected_SED += '-' + str(sel_logg) + metal_add + 'a+*'
+        gl = glob.glob(selected_SED)
+        selected_SED = gl[0]
+        tab = Table(fits.open(selected_SED)[1].data)
+        flux = np.array(tab['FLUX'].tolist()) * conversion
+        wave = np.array(tab['WAVELENGTH'].tolist()) * u.angstrom.to(u.um)
         return wave, flux
 
     def fetch_btnextgen(self):
@@ -1340,70 +1301,42 @@ class SEDPlotter:
 
         The directory containing the BT-NextGen spectra must be called
         BTNextGen. Within BTNextGen there should be yet another directory
-        called AGSS2009, within BTNextGen/ there should be the SED fits
+        called AGSS2009, within BTNextGen/AGSS2009 there should be the SED fits
         files with the following naming convention:
 
-        lteTTT-G.G[-/+]Z.Za+0.0..BT-NextGen.AGSS2009.xml
+        lteTTT-G.G[-/+]Z.Za+0.0..BT-NextGen.AGSS2009.fits
 
         where TTT are the first 3 digits of the effective temperature if it's a
         number over 10000, else it's the first 2 digit prepended by a 0.
         G.G is the log g and Z.Z the metallicity.
-        
-        -David 2/19/2025 updated to handle non fits files + some quality of life changes
         """
-        conversion = (u.erg / u.s / u.cm ** 2 / u.angstrom).to(u.erg / u.s / u.cm ** 2 / u.um)
-
-        # Select closest model grid values
+        conversion = (u.erg / u.s / u.cm ** 2 / u.angstrom)
+        conversion = conversion.to(u.erg / u.s / u.cm ** 2 / u.um)
         teff = self.theta[0]
         logg = self.theta[1]
         z = self.theta[2]
-
-        select_teff = np.argmin(abs(teff - np.unique(self.star.teff)))
-        select_logg = np.argmin(abs(logg - np.unique(self.star.logg)))
-        select_z = np.argmin(abs(z - np.unique(self.star.z)))
-
+        select_teff = np.argmin((abs(teff - np.unique(self.star.teff))))
+        select_logg = np.argmin((abs(logg - np.unique(self.star.logg))))
+        select_z = np.argmin((abs(z - np.unique(self.star.z))))
         sel_teff = int(np.unique(self.star.teff)[select_teff]) // 100
         sel_logg = np.unique(self.star.logg)[select_logg]
         sel_z = np.unique(self.star.z)[select_z]
-
-        # Format metallicity
+        metal_add = ''
         if sel_z < 0:
             metal_add = str(sel_z)
-        elif sel_z == 0:
+        if sel_z == 0:
             metal_add = '-0.0'
-        else:
+        if sel_z > 0:
             metal_add = '+' + str(sel_z)
-
-        # Build search pattern (ignore alpha completely)
-        pattern = self.moddir + 'BTNextGen/lte'
-        pattern += f"{sel_teff:03d}-{sel_logg:.1f}{metal_add}*"
-        pattern = os.path.expanduser(pattern)
-
-        print("🔍 Searching for models with pattern:", pattern)
-
-        # Find model file using glob wildcard
-        matches = glob.glob(pattern)
-
-        if not matches:
-            raise FileNotFoundError(f"❌ No model file found for pattern: {pattern}\n"
-                                    f"Please download the BT-NextGen file for a star with:\n"
-                                    f"T: {sel_teff:03d}\n"
-                                    f"z: {metal_add}\n"
-                                    f"Log(g): {sel_logg:.1f}")
-
-        selected_SED = matches[0]
-        print("✅ Using model file:", selected_SED)
-
-        df = read_votable_as_dataframe(selected_SED)
-
-        # Convert columns to arrays and apply units
-        wave = df['WAVELENGTH'].to_numpy() * u.angstrom.to(u.um)
-        flux = df['FLUX'].to_numpy() * conversion
-
-        # Resolve dtype mismatch
-        wave = wave.astype('float64')
-        flux = flux.astype('float64')
-
+        selected_SED = self.moddir + 'BTNextGen/AGSS2009/lte'
+        selected_SED += str(sel_teff) if len(str(sel_teff)) == 3 else \
+            '0' + str(sel_teff)
+        selected_SED += '-' + str(sel_logg) + metal_add + 'a+*'
+        gl = glob.glob(selected_SED)
+        selected_SED = gl[0]
+        tab = Table(fits.open(selected_SED)[1].data)
+        flux = np.array(tab['FLUX'].tolist()) * conversion
+        wave = np.array(tab['WAVELENGTH'].tolist()) * u.angstrom.to(u.um)
         return wave, flux
 
     def fetch_btcond(self):
@@ -1419,61 +1352,34 @@ class SEDPlotter:
         where TTT are the first 3 digits of the effective temperature if it's a
         number over 10000, else it's the first 2 digit prepended by a 0.
         G.G is the log g and Z.Z the metallicity.
-        -David 28/03/2025 updated to handle non fits files + some quality of life changes
         """
-        # Conversion from erg/cm2/s/Angstrom to erg/cm2/s/micron
-        conversion = (u.erg / u.s / u.cm ** 2 / u.angstrom).to(u.erg / u.s / u.cm ** 2 / u.um)
-
-        # Select closest model grid values
+        conversion = (u.erg / u.s / u.cm ** 2 / u.angstrom)
+        conversion = conversion.to(u.erg / u.s / u.cm ** 2 / u.um)
         teff = self.theta[0]
         logg = self.theta[1]
         z = self.theta[2]
-
-        select_teff = np.argmin(abs(teff - np.unique(self.star.teff)))
-        select_logg = np.argmin(abs(logg - np.unique(self.star.logg)))
-        select_z = np.argmin(abs(z - np.unique(self.star.z)))
-
+        select_teff = np.argmin((abs(teff - np.unique(self.star.teff))))
+        select_logg = np.argmin((abs(logg - np.unique(self.star.logg))))
+        select_z = np.argmin((abs(z - np.unique(self.star.z))))
         sel_teff = int(np.unique(self.star.teff)[select_teff]) // 100
         sel_logg = np.unique(self.star.logg)[select_logg]
         sel_z = np.unique(self.star.z)[select_z]
-
-        # Format metallicity
+        metal_add = ''
         if sel_z < 0:
             metal_add = str(sel_z)
-        elif sel_z == 0:
+        if sel_z == 0:
             metal_add = '-0.0'
-        else:
+        if sel_z > 0:
             metal_add = '+' + str(sel_z)
-
-        # Build pattern for glob search (ignore alpha completely)
-        pattern = self.moddir + 'BTCond/lte'
-        pattern += f"{sel_teff:03d}-{sel_logg:.1f}{metal_add}*.BT-Cond.7.dat.xml"
-        pattern = os.path.expanduser(pattern)
-
-        # Find model file using glob wildcard
-
-        print("🔍 Searching for models with pattern:", pattern)
-
-        # Find model file using glob wildcard
-        matches = glob.glob(pattern)
-
-        if not matches:
-            raise FileNotFoundError(f"❌ No model file found for pattern: {pattern}")
-
-        selected_SED = matches[0]
-        print("✅ Using model file:", selected_SED)
-
-        # Read VOTable file
-        df = read_votable_as_dataframe(selected_SED)
-
-        # Convert columns to arrays and apply units
-        wave = df['WAVELENGTH'].to_numpy() * u.angstrom.to(u.um)
-        flux = df['FLUX'].to_numpy() * conversion
-
-        # Resolve dtype mismatch
-        wave = wave.astype('float64')
-        flux = flux.astype('float64')
-
+        selected_SED = self.moddir + 'BTCond/CIFIST2011/lte'
+        selected_SED += str(sel_teff) if len(str(sel_teff)) == 3 else \
+            '0' + str(sel_teff)
+        selected_SED += '-' + str(sel_logg) + metal_add + 'a+*'
+        gl = glob.glob(selected_SED)
+        selected_SED = gl[0]
+        tab = Table(fits.open(selected_SED)[1].data)
+        flux = np.array(tab['FLUX'].tolist()) * conversion
+        wave = np.array(tab['WAVELENGTH'].tolist()) * u.angstrom.to(u.um)
         return wave, flux
 
     def fetch_ck04(self):
@@ -1678,17 +1584,3 @@ class SEDPlotter:
                 except ValueError:
                     val = splt[1].split('\n')[0]
             setattr(self, attr, val)
-
-def read_votable_as_dataframe(file_path):
-    """
-    Reads a VOTable file and returns it as a pandas DataFrame.
-    """
-    if not os.path.isfile(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
-
-    if os.path.getsize(file_path) == 0:
-        raise ValueError(f"File is empty: {file_path}")
-
-    votable = parse(file_path)
-    table = votable.get_first_table()
-    return table.to_table().to_pandas()

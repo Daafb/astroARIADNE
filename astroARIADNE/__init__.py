@@ -25,4 +25,4 @@ __author__ = 'Jose Ignacio Vines'
 __email__ = 'jose.vines@ug.uchile.cl'
 __license__ = 'MIT'
 __description__ = 'Bayesian Model Averaging SED fitter'
-__version__ = get_distribution('astroARIADNE').version
+__version__ = "1.1.1"

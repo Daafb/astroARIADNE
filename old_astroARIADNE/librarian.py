@@ -608,18 +608,11 @@ class Librarian:
         else:
             self._retrieve_from_stromgren(cat[mask])
 
-    def _get_apass(self, cat): # hi future reader, i fixed a bug https://github.com/jvines/astroARIADNE/issues/73
+    def _get_apass(self, cat):
         print('Checking catalog APASS')
-        try:
-            # Attempt to access 'recno'
-            mask = cat['recno'] == int(self.ids['APASS9'])
-            print("Using 'recno' for APASS9 matching.")
-        except KeyError:
-            # 'recno' column is missing; skip APASS9 processing for this star
-            warning_msg = f"Warning: 'recno' column not found in APASS9 for star {self.starname}. Skipping APASS9 magnitudes."
-            print(warning_msg)
-            return
-        self._retrieve_from_cat(cat[mask], 'APASS')
+        CatalogWarning('APASS', 5).warn()
+        # mask = cat['recno'] == int(self.ids['APASS'])
+        # self._retrieve_from_cat(cat[mask], 'APASS')
 
     def _get_wise(self, cat):
         print('Checking catalog All-WISE')
